@@ -8,4 +8,4 @@
 //}
 rootProject.name = "MyPlugins"
 include ':app'
-include ':KInjector'
+include ':kinjector'
