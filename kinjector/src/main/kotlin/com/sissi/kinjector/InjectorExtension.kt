@@ -2,8 +2,11 @@ package com.sissi.kinjector
 
 import org.gradle.api.provider.Property
 
-interface InjectorExtension {
-    val clz: Property<String>
-    val method: Property<String>
-    val body: Property<String>
+abstract class InjectorExtension {
+    val METHOD_BEGIN = -1
+    val METHOD_END = -2
+    abstract val clz: Property<String>
+    abstract val method: Property<String>
+    abstract val body: Property<String>
+    abstract val at: Property<Int>
 }

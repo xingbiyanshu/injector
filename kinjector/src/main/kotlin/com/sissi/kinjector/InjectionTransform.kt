@@ -73,13 +73,19 @@ class InjectionTransform(private val project:Project) : Transform() {
                             if (!tmpDir.exists()){
                                 tmpDir.mkdirs()
                             }
+//                            pool.importPackage("java.util.List")
+//                            pool.importPackage("java.util.Arrays")
+//                            pool.importPackage("android.os.Looper")
 
                             val classname = entry.name.toClassname()
                             val clazz = pool.get(classname)
                             println("##clazz=${clazz.name}, tmpDir=${tmpDir.absolutePath}")
-                            transformKLog(clazz)
+                            transformKLog(clazz, pool)
                             clazz.writeFile(tmpDir.absolutePath)
                             clazz.detach() // 及时释放
+
+//                            val compiler = Javac(clazz)
+//                            compiler.compile()
 
                             val env: MutableMap<String, String> = HashMap()
                             env["create"] = "true"
@@ -100,7 +106,7 @@ class InjectionTransform(private val project:Project) : Transform() {
     }
 
 
-    private fun transformKLog(clazz: CtClass) {
+    private fun transformKLog(clazz: CtClass, pool:ClassPool) {
         clazz.declaredMethods.forEach { method ->
             val name = method.name
             val expectedParas = listOf("java.lang.String", "java.lang.Object[]")
@@ -118,17 +124,76 @@ class InjectionTransform(private val project:Project) : Transform() {
                     }
                 }
                 if (parasMatched){
+//                    method.insertAt(135, """
+//                    {
+//                        System.out.println("paras1: "+$1);
+//                        Class[] clzs = ${'$'}sig;
+//                        System.out.println("paras1: "+clzs[0]);
+//                        Object[] paras = ${'$'}args;
+//                        for (int i=0; i<paras.length; ++i){
+//                            System.out.println(i+"i="+paras[i]);
+//                        }
+//                    }
+//                    """.trimIndent())
+//
+//                    method.insertBefore(
+//                        """System.out.println("Inject KLog IN");"""
+//                    )
+//                    method.insertAfter(
+//                        """System.out.println("Inject KLog OUT");"""
+//                    )
+
+                    method.addLocalVariable("isMainThread", CtClass.booleanType)
+                    method.addLocalVariable("start", CtClass.longType)
+//                    method.addLocalVariable("end", CtClass.longType)
+                    method.addLocalVariable("i", CtClass.longType)
+
+//                    method.insertBefore(
+//                        """
+//                            {
+//                                if (true){
+//                                    System.out.println("Inject KLog IN");
+//                                    start = System.currentTimeMillis();
+//                                    for(i=0; i<1000000000L; ++i){}
+//                                }
+//                            }
+//                            """
+//                    )
+
                     method.insertBefore(
-                        """System.out.println("Inject KLog IN");"""
+                    """
+                            isMainThread = Thread.currentThread().getName().equals("main");
+                            start = System.currentTimeMillis();
+                            if (isMainThread){
+                                for(i=0; i<100000000L; ++i){}
+                            }
+                        """
                     )
+
                     method.insertAfter(
-                        """System.out.println("Inject KLog OUT");"""
+                    """
+                            if (isMainThread){
+                                Object[] paras = ${'$'}args;
+                                StringBuilder sb = new StringBuilder();
+                                for (int i=0; i<paras.length; ++i){
+                                    sb.append(paras[i]);
+                                    if (i != paras.length-1){
+                                        sb.append(", ");
+                                    }
+                                }
+                                String parasStr = sb.toString();
+                                long end = System.currentTimeMillis();
+                                System.out.println("${clazz.name}#${method.name}("+parasStr+") cost time: "+(end-start)+"ms");
+                            }
+                        """
                     )
+
                     return
                 }
             }
 
         }
+
     }
 
     private fun String.toClassname() =
