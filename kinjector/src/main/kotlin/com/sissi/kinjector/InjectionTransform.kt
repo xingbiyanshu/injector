@@ -73,6 +73,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
             println("secondaryInput=${it.secondaryInput}")
         }
 
+        classPool.importPackage("android.util.Log")
+
         transformInvocation.inputs.forEach{ input ->
             input.directoryInputs.forEach { dir ->
                 val outputDir = transformInvocation.outputProvider.getContentLocation(
@@ -247,7 +249,6 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                         method.addLocalVariable("start", CtClass.longType)
                         method.insertBefore(
                         """
-                                System.out.println("${clazz.name}#${method.name} IN");
                                 start = System.currentTimeMillis();
                             """
                         )
@@ -265,7 +266,7 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                                 }
                                 String parasStr = sb.toString();
                                 long costTime = System.currentTimeMillis()-start;
-                                System.out.println("${clazz.name}#${method.name}("+parasStr+") cost time: "+costTime+"ms");
+                                Log.d("KInjector", "${clazz.name}#${method.name}("+parasStr+") cost time: "+costTime+"ms");
                                 long limit = ${methodTimeCostMonitor.alertWhenReach};
                                 if (costTime >= limit){
                                     throw new RuntimeException("cost time "+costTime+"ms reach the limit "+limit+"ms");
