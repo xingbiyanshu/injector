@@ -202,14 +202,18 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                         String parasStr = sb.toString();
                         long costTime = System.currentTimeMillis()-start;
                         String fullMethodName = "${clazz.name}#${method.name}";
-                        long limit = ${methodTimeCostMonitor.alertWhenReach};
+                        long limit = ${methodTimeCostMonitor.timeLimit};
                         long warningLine = limit*0.8;
                         if (costTime < warningLine){
                             Log.d("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
                         }else if (warningLine < costTime && costTime < limit){
                             Log.w("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
                         }else{
-                            throw new RuntimeException(fullMethodName+" cost time "+costTime+"ms reach the limit "+limit+"ms");
+                            if ("${methodTimeCostMonitor.actionWhenReachLimit}".equals("${methodTimeCostMonitor.ACTION_LOG}")){
+                                Log.e("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
+                            }else{
+                                throw new RuntimeException(fullMethodName+" cost time "+costTime+"ms reach the limit "+limit+"ms");
+                            }
                         }
                     }
                 """.trimIndent()

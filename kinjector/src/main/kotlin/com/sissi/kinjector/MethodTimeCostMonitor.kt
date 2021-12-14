@@ -39,9 +39,26 @@ abstract class MethodTimeCostMonitor {
     var condition: String="true"
 
     /**
-     * 报警阈值（单位：毫秒）。
-     * 耗时达到或超出该值时报警（程序崩溃）。
-     * 默认没有阈值，仅打印方法耗时，不会报警。
+     * 耗时阈值（单位：毫秒）。
+     * 耗时达到或超出该阈值时执行指定的行为[actionWhenReachLimit]。
+     * 默认没有阈值。
      */
-    var alertWhenReach: Int=1000*1000
+    var timeLimit: Int=1000*1000
+
+    /**
+     * 打日志
+     */
+    val ACTION_LOG = "LOG"
+
+    /**
+     * 让程序崩溃
+     */
+    val ACTION_CRASH = "CRASH"
+
+    /**
+     * 耗时达到或超出该阈值时指定的行为
+     * 可取值[ACTION_LOG],[ACTION_CRASH]，默认崩溃
+     */
+    var actionWhenReachLimit = ACTION_CRASH
+
 }
