@@ -45,8 +45,10 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
     }
 
     override fun transform(transformInvocation: TransformInvocation) {
-        println("###transform...")
+//        println("###transform...")
         methodTimeCostMonitor = project.extensions.findByName("methodTimeCostMonitor") as MethodTimeCostMonitor
+
+        methodTimeCostMonitor.check()
 
         classPool = ClassPool.getDefault()
         classPool.insertClassPath(
@@ -54,11 +56,11 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
         )
         transformInvocation.inputs.forEach { input ->
             input.directoryInputs.forEach {
-                println("input.directoryInput=${it.file.absolutePath}")
+//                println("input.directoryInput=${it.file.absolutePath}")
                 classPool.insertClassPath(it.file.absolutePath)
             }
             input.jarInputs.forEach {
-                println("input.jarInput=${it.file.absolutePath}")
+//                println("input.jarInput=${it.file.absolutePath}")
                 classPool.insertClassPath(it.file.absolutePath)
             }
         }
@@ -107,7 +109,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
     private fun transformDirectoryInput(inputDir:DirectoryInput, outputDir:File){
 //        println("transformDirectoryInput: \ninputDir=${inputDir.file.absolutePath}, \noutputDir=${outputDir.absolutePath}")
         inputDir.file.copyRecursively(outputDir, true)
-        val packageScopes = methodTimeCostMonitor.scope.parseScopes()
+
+        val packageScopes = methodTimeCostMonitor.parsePackageScopes()
 //        println("packageScopes=$packageScopes")
         val methodTimeCostMonitorNeedProcess = methodTimeCostMonitor.run {
             enable && (scope == SCOPE_ALL || scope == SCOPE_SOURCE || packageScopes.isNotEmpty())
@@ -121,8 +124,9 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                         return@forEach
                     }
 //                    println("file=${file.absolutePath}")
-                    val clazz = classPool.get(classname)
-                    injectMethodTimeCostMonitor(clazz, methodTimeCostMonitor, outputDir)
+                    if (methodTimeCostMonitorNeedProcess) {
+                        injectMethodTimeCostMonitor(classname, methodTimeCostMonitor, outputDir)
+                    }
                 }
             }
         }
@@ -130,15 +134,17 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
 
     private fun transformJarInput(jarInput:JarInput, outputJar : File){
-//        println("transformJarInput: \njarInput=${jarInput.file.absolutePath}")
-        val packageScopes = methodTimeCostMonitor.scope.parseScopes()
+//        println("transformJarInput: \njarInput=${jarInput.file.absolutePath}, \noutputJar=${outputJar.absolutePath}")
+        jarInput.file.copyTo(outputJar, true)
+
+        val packageScopes = methodTimeCostMonitor.parsePackageScopes()
 //        println("packageScopes=$packageScopes")
         val methodTimeCostMonitorNeedProcess = methodTimeCostMonitor.run {
             enable && (scope == SCOPE_ALL || scope == SCOPE_LIB || packageScopes.isNotEmpty())
         }
         val needProcess = methodTimeCostMonitorNeedProcess
         if (needProcess){
-            val jarFile = JarFile(jarInput.file)
+            val jarFile = JarFile(outputJar)
             val entries: Enumeration<JarEntry> = jarFile.entries()
             while (entries.hasMoreElements()) {
                 val entry = entries.nextElement()
@@ -147,40 +153,60 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                 }
 
                 val classname = entry.name.toClassname()
-                val clazz = classPool.get(classname)
-                val tmpDir = File("${project.buildDir}/intermediates/transforms/tmp/")
-                if (!tmpDir.exists()){
-                    tmpDir.mkdirs()
-                }
-
                 if (packageScopes.isNotEmpty() && !packageScopes.contains(classname.getPackage())){
                     continue
                 }
+//                println("entry=$entry, entry.attributes=${entry.attributes}")
 
-//                println("entry=$entry")
+                if (methodTimeCostMonitorNeedProcess) {
+                    val tmpDir = File("${project.buildDir}/intermediates/transforms/tmp/")
+                    if (!tmpDir.exists()){
+                        tmpDir.mkdirs()
+                    }
 
-                injectMethodTimeCostMonitor(clazz, methodTimeCostMonitor, tmpDir)
-
-                val env: MutableMap<String, String> = HashMap()
-                env["create"] = "true"
-                val jarUri = URI.create("jar:" + jarInput.file.toURI())
-                FileSystems.newFileSystem(jarUri, env).use { zipfs ->
-                    val classToInject = Paths.get(tmpDir.absolutePath+"/"+entry.name)
-                    val pathInJarfile = zipfs.getPath(entry.name)
-                    // copy a file into the zip file
-                    Files.copy(classToInject, pathInJarfile, StandardCopyOption.REPLACE_EXISTING)
+                    if (injectMethodTimeCostMonitor(classname, methodTimeCostMonitor, tmpDir)) {
+                        val env: MutableMap<String, String> = HashMap()
+                        env["create"] = "true"
+                        val jarUri = URI.create("jar:" + outputJar.toURI())
+                        FileSystems.newFileSystem(jarUri, env).use { zipfs ->
+                            val classToInject = Paths.get(tmpDir.absolutePath + "/" + entry.name)
+                            val pathInJarfile = zipfs.getPath(entry.name)
+//                            println("classToInject=$classToInject, pathInJarfile=$pathInJarfile")
+                            // copy a file into the zip file
+                            Files.copy(
+                                classToInject,
+                                pathInJarfile,
+                                StandardCopyOption.REPLACE_EXISTING
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        jarInput.file.copyTo(outputJar, true)
-
     }
 
 
-    private fun injectMethodTimeCostMonitor(clazz:CtClass, methodTimeCostMonitor : MethodTimeCostMonitor, outputDir:File){
+    private fun injectMethodTimeCostMonitor(classname:String, methodTimeCostMonitor : MethodTimeCostMonitor, outputDir:File) : Boolean{
+        if (classname == "META-INF.versions.9.module-info"){
+            return false
+        }
+        val clazz:CtClass
+        try {
+            clazz = classPool.get(classname)
+        }catch (e:Exception){
+            println("ERROR: read class $classname failed!")
+            return false
+        }
+
         clazz.declaredMethods.forEach { method ->
-//            println("method=$method")
+
+            val codeLen = method.methodInfo2?.codeAttribute?.codeLength
+            if (method.isEmpty || codeLen==null || codeLen==0){
+                return@forEach
+            }
+//            println("classname=$classname, method=$method, isEmpty= ${method.isEmpty}, codeLen=$codeLen")
+
             method.addLocalVariable("start", CtClass.longType)
             method.insertBefore(
                 """
@@ -204,12 +230,13 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                         String fullMethodName = "${clazz.name}#${method.name}";
                         long limit = ${methodTimeCostMonitor.timeLimit};
                         long warningLine = limit*0.8;
+                        String actionWhenReachLimit = "${methodTimeCostMonitor.actionWhenReachLimit}";
                         if (costTime < warningLine){
                             Log.d("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
                         }else if (warningLine < costTime && costTime < limit){
                             Log.w("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
                         }else{
-                            if ("${methodTimeCostMonitor.actionWhenReachLimit}".equals("${methodTimeCostMonitor.ACTION_LOG}")){
+                            if (actionWhenReachLimit.equals("${methodTimeCostMonitor.ACTION_LOG}")){
                                 Log.e("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
                             }else{
                                 throw new RuntimeException(fullMethodName+" cost time "+costTime+"ms reach the limit "+limit+"ms");
@@ -223,6 +250,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
         clazz.writeFile(outputDir.absolutePath)
         clazz.detach() // 及时释放
+
+        return true
     }
 
 
@@ -232,8 +261,6 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
             .replace(".class", "")
 
     private fun File.isClassfile(): Boolean = isFile && path.endsWith(".class")
-
-    private fun String.parseScopes() = split(Regex("\\s+"))
 
     private fun String.getPackage() = substringBeforeLast(".")
 
