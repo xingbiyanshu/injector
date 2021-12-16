@@ -3,14 +3,14 @@ package com.sissi.kinjector
 import java.lang.RuntimeException
 
 /**
- * 方法执行耗时监控
+ *（方法执行）耗时监控器
  */
-abstract class MethodTimeCostMonitor {
+abstract class TimeCostMonitor {
 
     /**
      * 是否启用该功能。默认关闭
      */
-    var enable: Boolean = false
+    var enable = false
 
     /**
      * 项目中所有方法。包括源码中的和库中的
@@ -36,21 +36,21 @@ abstract class MethodTimeCostMonitor {
      * scope = "com.kedacom.sdk.startup
      *          com.kedacom.sdk.login"
      */
-    var scope: String = SCOPE_SOURCE
+    var scope = SCOPE_SOURCE
 
     /**
      * 监控条件，仅满足该条件的方法才被监控。
      * 默认无条件，即监控范围内所有方法。
      * 该条件为一段代码完备的表达式。
      */
-    var condition: String="true"
+    var condition="true"
 
     /**
      * 耗时阈值（单位：毫秒）。
      * 耗时达到或超出该阈值时执行指定的行为[actionWhenReachLimit]。
      * 默认没有阈值。
      */
-    var timeLimit: Int=1000*1000
+    var timeLimit=1000*1000
 
     /**
      * 打日志
@@ -91,7 +91,7 @@ abstract class MethodTimeCostMonitor {
     }
 
     internal fun check(){
-        println("MethodTimeCostMonitor{" +
+        println("TimeCostMonitor{" +
                 "enable=$enable, scope=$scope, condition=$condition, timeLimit=$timeLimit, actionWhenReachLimit=$actionWhenReachLimit" +
                 "}")
         checkScope()

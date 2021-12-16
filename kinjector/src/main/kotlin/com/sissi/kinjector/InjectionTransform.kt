@@ -18,7 +18,7 @@ import kotlin.collections.HashMap
 
 class InjectionTransform(private val project:Project, private val android:BaseExtension) : Transform() {
 
-    private lateinit var methodTimeCostMonitor:MethodTimeCostMonitor
+    private lateinit var timeCostMonitor:TimeCostMonitor
 
     private lateinit var classPool:ClassPool
 
@@ -46,9 +46,9 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
     override fun transform(transformInvocation: TransformInvocation) {
 //        println("###transform...")
-        methodTimeCostMonitor = project.extensions.findByName("methodTimeCostMonitor") as MethodTimeCostMonitor
+        timeCostMonitor = project.extensions.findByName("timeCostMonitor") as TimeCostMonitor
 
-        methodTimeCostMonitor.check()
+        timeCostMonitor.check()
 
         classPool = ClassPool.getDefault()
         classPool.insertClassPath(
@@ -110,12 +110,12 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 //        println("transformDirectoryInput: \ninputDir=${inputDir.file.absolutePath}, \noutputDir=${outputDir.absolutePath}")
         inputDir.file.copyRecursively(outputDir, true)
 
-        val packageScopes = methodTimeCostMonitor.parsePackageScopes()
+        val packageScopes = timeCostMonitor.parsePackageScopes()
 //        println("packageScopes=$packageScopes")
-        val methodTimeCostMonitorNeedProcess = methodTimeCostMonitor.run {
+        val timeCostMonitorNeedProcess = timeCostMonitor.run {
             enable && (scope == SCOPE_ALL || scope == SCOPE_SOURCE || packageScopes.isNotEmpty())
         }
-        val needProcess = methodTimeCostMonitorNeedProcess
+        val needProcess = timeCostMonitorNeedProcess
         if (needProcess){
             outputDir.walk().forEach { file ->
                 if (file.isClassfile()) {
@@ -124,8 +124,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                         return@forEach
                     }
 //                    println("file=${file.absolutePath}")
-                    if (methodTimeCostMonitorNeedProcess) {
-                        injectMethodTimeCostMonitor(classname, methodTimeCostMonitor, outputDir)
+                    if (timeCostMonitorNeedProcess) {
+                        injectTimeCostMonitor(classname, timeCostMonitor, outputDir)
                     }
                 }
             }
@@ -137,12 +137,12 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 //        println("transformJarInput: \njarInput=${jarInput.file.absolutePath}, \noutputJar=${outputJar.absolutePath}")
         jarInput.file.copyTo(outputJar, true)
 
-        val packageScopes = methodTimeCostMonitor.parsePackageScopes()
+        val packageScopes = timeCostMonitor.parsePackageScopes()
 //        println("packageScopes=$packageScopes")
-        val methodTimeCostMonitorNeedProcess = methodTimeCostMonitor.run {
+        val timeCostMonitorNeedProcess = timeCostMonitor.run {
             enable && (scope == SCOPE_ALL || scope == SCOPE_LIB || packageScopes.isNotEmpty())
         }
-        val needProcess = methodTimeCostMonitorNeedProcess
+        val needProcess = timeCostMonitorNeedProcess
         if (needProcess){
             val jarFile = JarFile(outputJar)
             val entries: Enumeration<JarEntry> = jarFile.entries()
@@ -158,13 +158,13 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                 }
 //                println("entry=$entry, entry.attributes=${entry.attributes}")
 
-                if (methodTimeCostMonitorNeedProcess) {
+                if (timeCostMonitorNeedProcess) {
                     val tmpDir = File("${project.buildDir}/intermediates/transforms/tmp/")
                     if (!tmpDir.exists()){
                         tmpDir.mkdirs()
                     }
 
-                    if (injectMethodTimeCostMonitor(classname, methodTimeCostMonitor, tmpDir)) {
+                    if (injectTimeCostMonitor(classname, timeCostMonitor, tmpDir)) {
                         val env: MutableMap<String, String> = HashMap()
                         env["create"] = "true"
                         val jarUri = URI.create("jar:" + outputJar.toURI())
@@ -187,7 +187,7 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
     }
 
 
-    private fun injectMethodTimeCostMonitor(classname:String, methodTimeCostMonitor : MethodTimeCostMonitor, outputDir:File) : Boolean{
+    private fun injectTimeCostMonitor(classname:String, timeCostMonitor : TimeCostMonitor, outputDir:File) : Boolean{
         if (classname == "META-INF.versions.9.module-info"){
             return false
         }
@@ -216,7 +216,7 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
             method.insertAfter(
                 """
-                    if (${methodTimeCostMonitor.condition}){
+                    if (${timeCostMonitor.condition}){
                         Object[] paras = ${'$'}args;
                         StringBuilder sb = new StringBuilder();
                         for (int i=0; i<paras.length; ++i){
@@ -228,15 +228,15 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                         String parasStr = sb.toString();
                         long costTime = System.currentTimeMillis()-start;
                         String fullMethodName = "${clazz.name}#${method.name}";
-                        long limit = ${methodTimeCostMonitor.timeLimit};
+                        long limit = ${timeCostMonitor.timeLimit};
                         long warningLine = limit*0.8;
-                        String actionWhenReachLimit = "${methodTimeCostMonitor.actionWhenReachLimit}";
+                        String actionWhenReachLimit = "${timeCostMonitor.actionWhenReachLimit}";
                         if (costTime < warningLine){
                             Log.d("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
                         }else if (warningLine < costTime && costTime < limit){
                             Log.w("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
                         }else{
-                            if (actionWhenReachLimit.equals("${methodTimeCostMonitor.ACTION_LOG}")){
+                            if (actionWhenReachLimit.equals("${timeCostMonitor.ACTION_LOG}")){
                                 Log.e("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
                             }else{
                                 throw new RuntimeException(fullMethodName+" cost time "+costTime+"ms reach the limit "+limit+"ms");
