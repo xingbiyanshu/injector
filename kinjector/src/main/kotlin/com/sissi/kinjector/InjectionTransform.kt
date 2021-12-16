@@ -24,6 +24,10 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
     private lateinit var classPool:ClassPool
 
+    private var outputDirSet = HashSet<File>()
+
+    private var outputJarSet = HashSet<File>()
+
     override fun getName(): String {
         return javaClass.simpleName
     }
@@ -59,13 +63,29 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
             "${android.sdkDirectory.absolutePath}/platforms/${android.compileSdkVersion}/android.jar"
         )
         transformInvocation.inputs.forEach { input ->
-            input.directoryInputs.forEach {
+            input.directoryInputs.forEach {dir->
 //                println("input.directoryInput=${it.file.absolutePath}")
-                classPool.insertClassPath(it.file.absolutePath)
+                val outputDir = transformInvocation.outputProvider.getContentLocation(
+                    dir.file.absolutePath,
+                    outputTypes,
+                    scopes,
+                    Format.DIRECTORY
+                )
+                dir.file.copyRecursively(outputDir, true)
+                classPool.insertClassPath(outputDir.absolutePath)
+                outputDirSet.add(outputDir)
             }
-            input.jarInputs.forEach {
+            input.jarInputs.forEach { jar ->
 //                println("input.jarInput=${it.file.absolutePath}")
-                classPool.insertClassPath(it.file.absolutePath)
+                val outputJar = transformInvocation.outputProvider.getContentLocation(
+                    jar.file.absolutePath,
+                    jar.contentTypes,
+                    jar.scopes,
+                    Format.JAR
+                )
+                jar.file.copyTo(outputJar, true)
+                classPool.insertClassPath(outputJar.absolutePath)
+                outputJarSet.add(outputJar)
             }
         }
 
@@ -84,36 +104,19 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
         classPool.importPackage("android.util.Log")
 
-        transformInvocation.inputs.forEach{ input ->
-            input.directoryInputs.forEach { dir ->
-                val outputDir = transformInvocation.outputProvider.getContentLocation(
-                    dir.file.absolutePath,
-                    outputTypes,
-                    scopes,
-                    Format.DIRECTORY
-                )
-
-                transformDirectoryInput(dir, outputDir)
-            }
-
-            input.jarInputs.forEach { jar ->
-                val outputJar = transformInvocation.outputProvider.getContentLocation(
-                    jar.file.absolutePath,
-                    jar.contentTypes,
-                    jar.scopes,
-                    Format.JAR
-                )
-
-                transformJarInput(jar, outputJar)
-            }
+        outputDirSet.forEach {
+            transformDir(it)
         }
+
+        outputJarSet.forEach {
+            transformJar(it)
+        }
+
     }
 
 
-    private fun transformDirectoryInput(inputDir:DirectoryInput, outputDir:File){
+    private fun transformDir(dir:File){
 //        println("transformDirectoryInput: \ninputDir=${inputDir.file.absolutePath}, \noutputDir=${outputDir.absolutePath}")
-        inputDir.file.copyRecursively(outputDir, true)
-
         val patientList = ambulance.patients
         val ambulanceNeedProcess = ambulance.enable && patientList.isNotEmpty()
         val packageScopes = timeCostMonitor.parsePackageScopes()
@@ -124,17 +127,17 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
         val needProcess = timeCostMonitorNeedProcess || ambulanceNeedProcess
         if (needProcess){
-            outputDir.walk().forEach { file ->
+            dir.walk().forEach { file ->
                 if (file.isClassfile()) {
-                    val classname = file.relativeTo(outputDir).path.toClassname()
+                    val classname = file.relativeTo(dir).path.toClassname()
 //                    println("file=${file.absolutePath}")
 
                     if (ambulanceNeedProcess){
-                        injectAmbulance(classname, ambulance, outputDir)
+                        injectAmbulance(classname, ambulance, dir)
                     }
                     if (timeCostMonitorNeedProcess) {
                         if (packageScopes.isEmpty() || packageScopes.contains(classname.getPackage())) {
-                            injectTimeCostMonitor(classname, timeCostMonitor, outputDir)
+                            injectTimeCostMonitor(classname, timeCostMonitor, dir)
                         }
                     }
                 }
@@ -143,10 +146,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
     }
 
 
-    private fun transformJarInput(jarInput:JarInput, outputJar : File){
+    private fun transformJar(jar : File){
 //        println("transformJarInput: \njarInput=${jarInput.file.absolutePath}, \noutputJar=${outputJar.absolutePath}")
-        jarInput.file.copyTo(outputJar, true)
-
         val packageScopes = timeCostMonitor.parsePackageScopes()
 //        println("packageScopes=$packageScopes")
         val timeCostMonitorNeedProcess = timeCostMonitor.run {
@@ -154,7 +155,7 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
         }
         val needProcess = timeCostMonitorNeedProcess
         if (needProcess){
-            val jarFile = JarFile(outputJar)
+            val jarFile = JarFile(jar)
             val entries: Enumeration<JarEntry> = jarFile.entries()
             while (entries.hasMoreElements()) {
                 val entry = entries.nextElement()
@@ -177,7 +178,7 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                     if (injectTimeCostMonitor(classname, timeCostMonitor, tmpDir)) {
                         val env: MutableMap<String, String> = HashMap()
                         env["create"] = "true"
-                        val jarUri = URI.create("jar:" + outputJar.toURI())
+                        val jarUri = URI.create("jar:" + jar.toURI())
                         FileSystems.newFileSystem(jarUri, env).use { zipfs ->
                             val classToInject = Paths.get(tmpDir.absolutePath + "/" + entry.name)
                             val pathInJarfile = zipfs.getPath(entry.name)
