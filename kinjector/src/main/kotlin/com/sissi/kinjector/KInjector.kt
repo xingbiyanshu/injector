@@ -7,7 +7,7 @@ import org.gradle.kotlin.dsl.create
 
 class KInjector : Plugin<Project> {
     override fun apply(target: Project) {
-        println("apply KInjector")
+//        println("apply KInjector")
         target.extensions.create<Ambulance>("ambulance")
         target.extensions.create<TimeCostMonitor>("timeCostMonitor")
         val ext = target.extensions.getByName("android") as BaseExtension

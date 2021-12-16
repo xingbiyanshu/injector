@@ -20,6 +20,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
     private lateinit var timeCostMonitor:TimeCostMonitor
 
+    private lateinit var ambulance: Ambulance
+
     private lateinit var classPool:ClassPool
 
     override fun getName(): String {
@@ -49,6 +51,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
         timeCostMonitor = project.extensions.findByName("timeCostMonitor") as TimeCostMonitor
 
         timeCostMonitor.check()
+
+        ambulance = project.extensions.findByName("ambulance") as Ambulance
 
         classPool = ClassPool.getDefault()
         classPool.insertClassPath(
@@ -110,22 +114,28 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 //        println("transformDirectoryInput: \ninputDir=${inputDir.file.absolutePath}, \noutputDir=${outputDir.absolutePath}")
         inputDir.file.copyRecursively(outputDir, true)
 
+        val patientList = ambulance.patients
+        val ambulanceNeedProcess = ambulance.enable && patientList.isNotEmpty()
         val packageScopes = timeCostMonitor.parsePackageScopes()
 //        println("packageScopes=$packageScopes")
         val timeCostMonitorNeedProcess = timeCostMonitor.run {
             enable && (scope == SCOPE_ALL || scope == SCOPE_SOURCE || packageScopes.isNotEmpty())
         }
-        val needProcess = timeCostMonitorNeedProcess
+
+        val needProcess = timeCostMonitorNeedProcess || ambulanceNeedProcess
         if (needProcess){
             outputDir.walk().forEach { file ->
                 if (file.isClassfile()) {
                     val classname = file.relativeTo(outputDir).path.toClassname()
-                    if (packageScopes.isNotEmpty() && !packageScopes.contains(classname.getPackage())){
-                        return@forEach
-                    }
 //                    println("file=${file.absolutePath}")
+
+                    if (ambulanceNeedProcess){
+                        injectAmbulance(classname, ambulance, outputDir)
+                    }
                     if (timeCostMonitorNeedProcess) {
-                        injectTimeCostMonitor(classname, timeCostMonitor, outputDir)
+                        if (packageScopes.isEmpty() || packageScopes.contains(classname.getPackage())) {
+                            injectTimeCostMonitor(classname, timeCostMonitor, outputDir)
+                        }
                     }
                 }
             }
@@ -252,6 +262,16 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
         clazz.detach() // 及时释放
 
         return true
+    }
+
+
+
+    fun injectAmbulance(classname:String, ambulance:Ambulance, outputDir:File){
+        val focusList = ambulance.getFocusList(classname)
+        if (focusList.isEmpty()){
+            return
+        }
+
     }
 
 
