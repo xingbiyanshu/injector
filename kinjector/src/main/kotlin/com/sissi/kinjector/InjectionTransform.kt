@@ -286,12 +286,12 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                         if (costTime < warningLine){
                             Log.d("KInjector", "time cost "+costTime+"ms by "+fullMethodName+"("+parasStr+")");
                         }else if (warningLine < costTime && costTime < limit){
-                            Log.w("KInjector", "heavy time cost "+costTime+"ms by "+fullMethodName+"("+parasStr+")");
+                            Log.w("KInjector", "heavy time cost "+costTime+"ms(limit "+limit+"ms) by "+fullMethodName+"("+parasStr+")");
                         }else{
                             if (actionWhenReachLimit.equals("${timeCostMonitor.ACTION_LOG}")){
-                                Log.e("KInjector", "overspent time cost "+costTime+"ms by "+fullMethodName+"("+parasStr+")");
+                                Log.e("KInjector", "overspent time cost "+costTime+"ms(limit "+limit+"ms) by "+fullMethodName+"("+parasStr+")");
                             }else{
-                                throw new RuntimeException("overspent time cost "+costTime+"ms by "+fullMethodName+"("+parasStr+")");
+                                throw new RuntimeException("overspent time cost "+costTime+"ms(limit "+limit+"ms) by "+fullMethodName+"("+parasStr+")");
                             }
                         }
                     }
