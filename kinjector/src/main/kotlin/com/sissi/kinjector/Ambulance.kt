@@ -1,6 +1,7 @@
 package com.sissi.kinjector
 
 import org.gradle.api.Action
+import java.lang.RuntimeException
 
 open class Ambulance {
     /**
@@ -17,10 +18,18 @@ open class Ambulance {
     }
 
     fun getFocusList(clz:String):List<Focus>{
-        return patients.flatMap {
-            it.focusSet
-        }
+        return patients.flatMap {it.focusSet}.filter { it.claz == clz }
     }
+
+    internal fun check(){
+        println(toString())
+        patients.forEach { it.check() }
+    }
+
+    override fun toString(): String {
+        return "Ambulance(enable=$enable, patients=$patients)"
+    }
+
 }
 
 
@@ -32,6 +41,15 @@ open class Patient {
         action.execute(focus)
         focusSet.add(focus)
     }
+
+    internal fun check(){
+        focusSet.forEach { it.check() }
+    }
+
+    override fun toString(): String {
+        return "Patient(focusSet=$focusSet)"
+    }
+
 }
 
 
@@ -55,8 +73,26 @@ open class Focus{
     val POS_INSERT_END = -2
     val POS_REPLACE_BODY = -3
 
+    private val posSet = setOf(POS_INSERT_BEGIN, POS_INSERT_END, POS_REPLACE_BODY)
+
     /**
      * 注入位置
      */
     var position=POS_REPLACE_BODY
+
+    internal fun methodName() = method.substringBefore("(")
+
+    internal fun methodParas()= method.substring(method.indexOfFirst { it=='(' }+1, method.indexOfLast { it==')' })
+        .split(Regex(",\\s*"))
+
+    internal fun check(){
+        if (position !in posSet && position<0){
+            throw RuntimeException("invalid position: $position")
+        }
+    }
+
+    override fun toString(): String {
+        return "Focus(claz='$claz', method='$method', repairCode='$repairCode', position=$position)"
+    }
+
 }
