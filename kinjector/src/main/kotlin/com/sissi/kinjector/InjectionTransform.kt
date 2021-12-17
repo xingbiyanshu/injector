@@ -148,17 +148,21 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                     return@forEach
                 }
 
+                val resList = ArrayList<Boolean>()
+
                 if (ambulanceNeedProcess){
-                    injectAmbulance(clazz, ambulance)
+                    resList.add(injectAmbulance(clazz, ambulance))
                 }
 
                 if (timeCostMonitorNeedProcess) {
                     if (packageScopes.isEmpty() || packageScopes.contains(classname.getPackage())) {
-                        injectTimeCostMonitor(clazz, timeCostMonitor)
+                        resList.add(injectTimeCostMonitor(clazz, timeCostMonitor))
                     }
                 }
 
-                clazz.writeFile(dir.absolutePath)
+                if (resList.contains(true)) {
+                    clazz.writeFile(dir.absolutePath)
+                }
                 clazz.detach() // 及时释放
             }
         }
@@ -194,24 +198,29 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                     continue
                 }
 
+                val resList = ArrayList<Boolean>()
+
                 if (ambulanceNeedProcess){
-                    injectAmbulance(clazz, ambulance)
+                    resList.add(injectAmbulance(clazz, ambulance))
                 }
 
                 if (timeCostMonitorNeedProcess) {
                     if (packageScopes.isEmpty() || packageScopes.contains(classname.getPackage())){
-                        injectTimeCostMonitor(clazz, timeCostMonitor)
+                        resList.add(injectTimeCostMonitor(clazz, timeCostMonitor))
                     }
                 }
 
-                val tmpDir = File("${project.buildDir}/intermediates/transforms/tmp/")
-                if (!tmpDir.exists()){
-                    tmpDir.mkdirs()
-                }
-                clazz.writeFile(tmpDir.absolutePath)
-                clazz.detach() // 及时释放
+                if (resList.contains(true)){
+                    val tmpDir = File("${project.buildDir}/intermediates/transforms/tmp/")
+                    if (!tmpDir.exists()){
+                        tmpDir.mkdirs()
+                    }
+                    clazz.writeFile(tmpDir.absolutePath)
 
-                packIntoJar(tmpDir, entry.name, jar)
+                    packIntoJar(tmpDir, entry.name, jar)
+                }
+
+                clazz.detach() // 及时释放
 
             }
         }
@@ -275,14 +284,14 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                         long warningLine = limit*0.8;
                         String actionWhenReachLimit = "${timeCostMonitor.actionWhenReachLimit}";
                         if (costTime < warningLine){
-                            Log.d("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
+                            Log.d("KInjector", "time cost "+costTime+"ms by "+fullMethodName+"("+parasStr+")");
                         }else if (warningLine < costTime && costTime < limit){
-                            Log.w("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
+                            Log.w("KInjector", "heavy time cost "+costTime+"ms by "+fullMethodName+"("+parasStr+")");
                         }else{
                             if (actionWhenReachLimit.equals("${timeCostMonitor.ACTION_LOG}")){
-                                Log.e("KInjector", fullMethodName+"("+parasStr+") cost time: "+costTime+"ms");
+                                Log.e("KInjector", "overspent time cost "+costTime+"ms by "+fullMethodName+"("+parasStr+")");
                             }else{
-                                throw new RuntimeException(fullMethodName+" cost time "+costTime+"ms reach the limit "+limit+"ms");
+                                throw new RuntimeException("overspent time cost "+costTime+"ms by "+fullMethodName+"("+parasStr+")");
                             }
                         }
                     }
