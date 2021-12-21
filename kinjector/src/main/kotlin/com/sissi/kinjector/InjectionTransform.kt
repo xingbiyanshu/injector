@@ -24,6 +24,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
     private lateinit var classPool:ClassPool
 
+    private lateinit var tmpDir:File
+
     private var outputDirSet = HashSet<File>()
 
     private var outputJarSet = HashSet<File>()
@@ -59,6 +61,11 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
         ambulance = project.extensions.findByName("ambulance") as Ambulance
 
         ambulance.check()
+
+        tmpDir = File("${project.buildDir}/intermediates/transforms/tmp/")
+        if (!tmpDir.exists()){
+            tmpDir.mkdirs()
+        }
 
         classPool = ClassPool.getDefault()
         classPool.insertClassPath(
@@ -137,7 +144,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                     return@forEach
                 }
 
-                val classname = file.relativeTo(dir).path.toClassname()
+                val relativePath = file.relativeTo(dir).path
+                val classname = relativePath.toClassname()
 //                    println("file=${file.absolutePath}")
 
                 val clazz:CtClass
@@ -161,7 +169,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                 }
 
                 if (resList.contains(true)) {
-                    clazz.writeFile(dir.absolutePath)
+                    clazz.writeFile(tmpDir.absolutePath)
+                    File(tmpDir, relativePath).copyTo(file, true)
                 }
                 clazz.detach() // 及时释放
             }
@@ -211,10 +220,6 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
                 }
 
                 if (resList.contains(true)){
-                    val tmpDir = File("${project.buildDir}/intermediates/transforms/tmp/")
-                    if (!tmpDir.exists()){
-                        tmpDir.mkdirs()
-                    }
                     clazz.writeFile(tmpDir.absolutePath)
 
                     packIntoJar(tmpDir, entry.name, jar)
@@ -250,6 +255,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
         if (clazz.name == "META-INF.versions.9.module-info"){
             return false
         }
+
+        println("-=-> trying inject time cost monitor")
 
         clazz.declaredMethods.forEach { method ->
 
@@ -300,6 +307,8 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
         }
 
+        println("<-=-inject time cost monitor SUCCESS")
+
         return true
     }
 
@@ -310,39 +319,47 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
             return false
         }
 
-        clazz.declaredMethods.forEach { method ->
-            focusList.forEach focus@{focus->
-//                println("focus.methodName=${focus.methodName()}, focus.methodParas=${focus.methodParas()}")
-                if (method.name!=focus.methodName()){
-                    return@focus
-                }
-                val methodParas = focus.methodParas()
-                if (methodParas.size != method.parameterTypes.size){
-                    return@focus
-                }
-                method.parameterTypes.forEachIndexed { index, ctClass ->
-//                    println("method=${method.name}, para[$index]=${ctClass.name}, " +
-//                            "focus.methodName=${focus.methodName()}, focus.methodPara[$index]=${methodParas[index]}")
-                    if (methodParas[index] != ctClass.name){
-                        return@focus
-                    }
-                }
+        focusList.forEach {focus->
+            val focusMethodName = focus.methodName()
+            val focusMethodParas = focus.methodParas()
+            println("-=-> trying inject ambulance, target: class=${clazz.name}, focusMethodName=$focusMethodName, focusMethodParas=$focusMethodParas")
 
-                when (focus.position) {
-                    focus.POS_INSERT_BEGIN -> {
-                        method.insertBefore(focus.repairCode)
+            run {
+                clazz.declaredMethods.forEach clzMethods@{ method ->
+                    if (method.name != focusMethodName) {
+                        return@clzMethods
                     }
-                    focus.POS_INSERT_END -> {
-                        method.insertAfter(focus.repairCode)
+                    if (focusMethodParas.size != method.parameterTypes.size) {
+                        return@clzMethods
                     }
-                    focus.POS_REPLACE_BODY -> {
-                        method.setBody(focus.repairCode)
+                    method.parameterTypes.forEachIndexed { index, ctClass ->
+                        println("para[$index]=${ctClass.name}, focusMethodParas[$index]=${focusMethodParas[index]}")
+                        if (focusMethodParas[index] != ctClass.name) {
+                            return@clzMethods
+                        }
                     }
-                    else -> {
-                        method.insertAt(focus.position, focus.repairCode)
+
+                    when (focus.position) {
+                        focus.POS_INSERT_BEGIN -> {
+                            method.insertBefore(focus.repairCode)
+                        }
+                        focus.POS_INSERT_END -> {
+                            method.insertAfter(focus.repairCode)
+                        }
+                        focus.POS_REPLACE_BODY -> {
+                            method.setBody(focus.repairCode)
+                        }
+                        else -> {
+                            method.insertAt(focus.position, focus.repairCode)
+                        }
                     }
+
+                    println("<-=- inject ambulance SUCCESS")
+
+                    return@run
                 }
             }
+
         }
 
         return true

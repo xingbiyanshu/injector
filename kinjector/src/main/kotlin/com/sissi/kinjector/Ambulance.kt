@@ -83,7 +83,7 @@ open class Focus{
     internal fun methodName() = method.substringBefore("(")
 
     internal fun methodParas()= method.substring(method.indexOfFirst { it=='(' }+1, method.indexOfLast { it==')' })
-        .split(Regex(",\\s*"))
+        .split(Regex(",\\s*")).filter { it.trim().isNotEmpty() }
 
     internal fun check(){
         if (position !in posSet && position<0){
