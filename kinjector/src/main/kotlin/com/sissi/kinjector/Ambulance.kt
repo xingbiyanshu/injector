@@ -3,6 +3,9 @@ package com.sissi.kinjector
 import org.gradle.api.Action
 import java.lang.RuntimeException
 
+/**
+ * 用于不改变问题源码的情况下修复bug
+ */
 open class Ambulance {
     /**
      * 是否启用
@@ -32,8 +35,15 @@ open class Ambulance {
 
 }
 
-
+/**
+ * 对应一个bug
+ */
 open class Patient {
+    /**
+     * 是否启用
+     */
+    var enable = true
+
     internal val focusSet = HashSet<Focus>()
 
     fun focus(action: Action<in Focus>){
@@ -53,7 +63,15 @@ open class Patient {
 }
 
 
+/**
+ * 对应一个修改点
+ */
 open class Focus{
+    /**
+     * 是否启用
+     */
+    var enable = true
+
     /**
      * 目标类
      */

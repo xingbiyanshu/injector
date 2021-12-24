@@ -256,7 +256,7 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
             return false
         }
 
-        println("-=-> trying inject time cost monitor")
+//        println("-=-> trying inject time cost monitor")
 
         clazz.declaredMethods.forEach { method ->
 
@@ -307,7 +307,7 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 
         }
 
-        println("<-=-inject time cost monitor SUCCESS")
+//        println("<-=-inject time cost monitor SUCCESS")
 
         return true
     }
