@@ -78,7 +78,7 @@ abstract class TimeCostMonitor {
 
     internal fun parsePackageScopes() : List<String>{
         return if (scope !in scopeSet){
-            scope.split(Regex("\\s+"))
+            scope.split(Regex("\\s+")).filter { it.trim().isNotEmpty() }
         }else{
             emptyList()
         }
