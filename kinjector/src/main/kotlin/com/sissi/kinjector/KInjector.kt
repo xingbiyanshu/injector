@@ -10,6 +10,7 @@ class KInjector : Plugin<Project> {
 //        println("apply KInjector")
         target.extensions.create<Ambulance>("ambulance")
         target.extensions.create<TimeCostMonitor>("timeCostMonitor")
+        target.extensions.create<Tracer>("tracer")
         val ext = target.extensions.getByName("android") as BaseExtension
         ext.registerTransform(InjectionTransform(target, ext))
     }

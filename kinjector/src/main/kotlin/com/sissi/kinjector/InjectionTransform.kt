@@ -366,6 +366,11 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
     }
 
 
+    private fun injectTracer(clazz:CtClass, tracer:Tracer):Boolean{
+        return true
+    }
+
+
     private fun String.toClassname() =
         replace("/", ".")
             .replace("\\", ".")
