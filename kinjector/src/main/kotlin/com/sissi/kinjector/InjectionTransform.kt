@@ -256,7 +256,7 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
             return false
         }
 
-//        println("-=-> trying inject time cost monitor")
+//        println("-=-> trying inject time cost monitor into ${clazz.name}")
 
         clazz.declaredMethods.forEach { method ->
 
@@ -267,9 +267,13 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
 //            println("classname=$classname, method=$method, isEmpty= ${method.isEmpty}, codeLen=$codeLen")
 
             method.addLocalVariable("start", CtClass.longType)
+            val methodPos = method.methodInfo2.getLineNumber(0)
             method.insertBefore(
                 """
                     start = System.currentTimeMillis();
+                    if (${timeCostMonitor.condition}){
+                        Log.d("KInjector", "calculate time cost of ${clazz.name}#${method.name}[at $methodPos]");
+                    }
                 """.trimIndent()
             )
 
