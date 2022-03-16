@@ -2,8 +2,12 @@ package com.sissi.kinjector
 
 import com.android.build.api.transform.*
 import com.android.build.gradle.BaseExtension
+import com.sissi.kinjector.Utils.strInfo
+import com.sissi.kinjector.Utils.strWarn
 import javassist.ClassPool
 import javassist.CtClass
+import javassist.CtField
+import javassist.CtNewMethod
 import org.gradle.api.Project
 import java.io.File
 import java.net.URI
@@ -14,7 +18,7 @@ import java.nio.file.StandardCopyOption
 import java.util.*
 import java.util.jar.JarEntry
 import java.util.jar.JarFile
-import kotlin.collections.HashMap
+
 
 class InjectionTransform(private val project:Project, private val android:BaseExtension) : Transform() {
 
@@ -326,41 +330,59 @@ class InjectionTransform(private val project:Project, private val android:BaseEx
         focusList.forEach {focus->
             val focusMethodName = focus.methodName()
             val focusMethodParas = focus.methodParas()
-            println("-=-> trying inject ambulance, target: class=${clazz.name}, focusMethodName=$focusMethodName, focusMethodParas=$focusMethodParas")
+            val newFields = focus.newFields
+            val newMethods = focus.newMethods
+
+            println(strInfo("\nINJECTING focus(${focus.patient}::${focus.name}):\n" +
+                    "claz=${clazz.name}, \n" +
+                    "method=${focus.method}, \n" +
+                    "repairCode=${strWarn(focus.repairCode)},\n" +
+                    strInfo("position=${focus.position},\n" +
+                    "newFields=${newFields.toString()}, \n" +
+                    "newMethods=${newMethods.toString()}")
+            ))
+
+            newFields?.forEach{
+                clazz.addField(CtField.make(it, clazz))
+            }
+
+            newMethods?.forEach{
+                clazz.addMethod(CtNewMethod.make(it, clazz))
+            }
 
             run {
-                clazz.declaredMethods.forEach clzMethods@{ method ->
-                    if (method.name != focusMethodName) {
-                        return@clzMethods
-                    }
-                    if (focusMethodParas.size != method.parameterTypes.size) {
-                        return@clzMethods
-                    }
-                    method.parameterTypes.forEachIndexed { index, ctClass ->
-                        println("para[$index]=${ctClass.name}, focusMethodParas[$index]=${focusMethodParas[index]}")
-                        if (focusMethodParas[index] != ctClass.name) {
+                if (focusMethodName.isNotBlank()){
+                    clazz.declaredMethods.forEach clzMethods@{ method ->
+                        if (method.name != focusMethodName) {
                             return@clzMethods
                         }
+                        if (focusMethodParas.size != method.parameterTypes.size) {
+                            return@clzMethods
+                        }
+                        method.parameterTypes.forEachIndexed { index, ctClass ->
+//                            println(strDebug("para[$index]=${ctClass.name}, focusMethodParas[$index]=${focusMethodParas[index]}"))
+                            if (focusMethodParas[index] != ctClass.name) {
+                                return@clzMethods
+                            }
+                        }
+
+                        when (focus.position) {
+                            focus.POS_INSERT_BEGIN -> {
+                                method.insertBefore(focus.repairCode)
+                            }
+                            focus.POS_INSERT_END -> {
+                                method.insertAfter(focus.repairCode)
+                            }
+                            focus.POS_REPLACE_BODY -> {
+                                method.setBody(focus.repairCode)
+                            }
+                            else -> {
+                                method.insertAt(focus.position, focus.repairCode)
+                            }
+                        }
+
+                        return@run
                     }
-
-                    when (focus.position) {
-                        focus.POS_INSERT_BEGIN -> {
-                            method.insertBefore(focus.repairCode)
-                        }
-                        focus.POS_INSERT_END -> {
-                            method.insertAfter(focus.repairCode)
-                        }
-                        focus.POS_REPLACE_BODY -> {
-                            method.setBody(focus.repairCode)
-                        }
-                        else -> {
-                            method.insertAt(focus.position, focus.repairCode)
-                        }
-                    }
-
-                    println("<-=- inject ambulance SUCCESS")
-
-                    return@run
                 }
             }
 

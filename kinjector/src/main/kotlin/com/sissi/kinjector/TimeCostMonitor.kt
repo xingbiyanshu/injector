@@ -91,9 +91,6 @@ abstract class TimeCostMonitor {
     }
 
     internal fun check(){
-        println("TimeCostMonitor{" +
-                "enable=$enable, scope=$scope, condition=$condition, timeLimit=$timeLimit, actionWhenReachLimit=$actionWhenReachLimit" +
-                "}")
         checkScope()
         checkAction()
     }

@@ -25,12 +25,7 @@ open class Ambulance {
     }
 
     internal fun check(){
-        println(toString())
         patients.forEach { it.check() }
-    }
-
-    override fun toString(): String {
-        return "Ambulance(enable=$enable, patients=$patients)"
     }
 
 }
@@ -44,20 +39,19 @@ open class Patient {
      */
     var enable = true
 
+    var name=""
+
     internal val focusSet = HashSet<Focus>()
 
     fun focus(action: Action<in Focus>){
         val focus = Focus()
+        focus.patient = name
         action.execute(focus)
         focusSet.add(focus)
     }
 
     internal fun check(){
         focusSet.forEach { it.check() }
-    }
-
-    override fun toString(): String {
-        return "Patient(focusSet=$focusSet)"
     }
 
 }
@@ -72,13 +66,29 @@ open class Focus{
      */
     var enable = true
 
+    var name=""
+
+    internal var patient=""
+
     /**
      * 目标类
      */
     var claz= ""
 
     /**
+     * 新增字段
+     */
+    var newFields:List<String>? = null
+
+    /**
+     * 新增方法
+     */
+    var newMethods:List<String>? = null
+
+
+    /**
      * 目标方法
+     * 如果目标方法为空，则表示修复策略是新增方法
      */
     var method=""
 
@@ -107,10 +117,6 @@ open class Focus{
         if (position !in posSet && position<0){
             throw RuntimeException("invalid position: $position")
         }
-    }
-
-    override fun toString(): String {
-        return "Focus(claz='$claz', method='$method', repairCode='$repairCode', position=$position)"
     }
 
 }
